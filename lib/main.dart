@@ -1,16 +1,18 @@
-// File: lib/main.dart (contoh nama file)
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart'; // Pastikan file ini ada dan sudah digenerate
+// Import file konfigurasi yang digenerate oleh FlutterFire CLI
+import 'firebase_options.dart'; 
 
 // =================================================================
-// BAGIAN UTAMA (MAIN)
+// 1. FUNGSI UTAMA (main)
 // =================================================================
 
 void main() async {
+  // Memastikan binding Flutter siap sebelum memanggil native code
   WidgetsFlutterBinding.ensureInitialized();
+  
   // Inisialisasi koneksi ke Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -25,7 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Live Notes',
+      title: 'Live Notes Firebase',
       theme: ThemeData(primarySwatch: Colors.blue),
       home: const HomePage(),
     );
@@ -33,7 +35,7 @@ class MyApp extends StatelessWidget {
 }
 
 // =================================================================
-// BAGIAN HOMEPAGE (Read, Create, Delete)
+// 2. HOMEPAGE (CREATE, READ, UPDATE, DELETE)
 // =================================================================
 
 class HomePage extends StatefulWidget {
@@ -43,16 +45,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // 1. Deklarasi TextEditingController dan CollectionReference
   // Variabel untuk menyimpan input form
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
 
-  // Referensi Koleksi Firestore
+  // Referensi Koleksi Firestore (di sini kita namakan 'notes')
   final CollectionReference _notes =
       FirebaseFirestore.instance.collection('notes');
 
-  // Pastikan untuk membersihkan controller saat State dihapus
   @override
   void dispose() {
     _titleController.dispose();
@@ -60,12 +60,20 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
   
-  // 2. Method _showForm (untuk Menambah Data - CREATE)
-  void _showForm(BuildContext context) {
-    // Reset controller jika form dipanggil untuk CREATE (tanpa parameter 'document')
-    _titleController.clear();
-    _contentController.clear();
-    
+  // --- FUNGSI CREATE DAN UPDATE ---
+  
+  // Parameter documentKey bersifat opsional. Jika null: CREATE, jika ada: UPDATE.
+  void _showForm(BuildContext context, [DocumentSnapshot? documentKey]) {
+    // 1. Mode Edit (Isi Controller dengan Data Lama)
+    if (documentKey != null) {
+      _titleController.text = documentKey['title'];
+      _contentController.text = documentKey['content'];
+    } else {
+      // 2. Mode Create (Pastikan Controller Bersih)
+      _titleController.clear();
+      _contentController.clear();
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -74,7 +82,6 @@ class _HomePageState extends State<HomePage> {
           top: 20,
           left: 20,
           right: 20,
-          // Ini memastikan keyboard tidak menutupi input
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: Column(
@@ -88,7 +95,7 @@ class _HomePageState extends State<HomePage> {
               controller: _contentController,
               decoration: const InputDecoration(labelText: 'Isi Catatan'),
               keyboardType: TextInputType.multiline,
-              maxLines: null, // Memungkinkan input multi-baris
+              maxLines: null,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -97,45 +104,54 @@ class _HomePageState extends State<HomePage> {
                 final String content = _contentController.text;
 
                 if (content.isNotEmpty) {
-                  // PERINTAH SIMPAN KE FIREBASE
-                  await _notes.add({
+                  // Data yang akan diproses
+                  final Map<String, dynamic> data = {
                     "title": title,
                     "content": content,
-                    // Menggunakan serverTimestamp untuk waktu yang konsisten
+                    // Menggunakan serverTimestamp untuk konsistensi waktu
                     "timestamp": FieldValue.serverTimestamp(), 
-                  });
+                  };
 
-                  // Bersihkan Input & Tutup Modal
+                  if (documentKey != null) {
+                    // Perintah UPDATE
+                    await _notes.doc(documentKey.id).update(data);
+                  } else {
+                    // Perintah CREATE
+                    await _notes.add(data);
+                  }
+
+                  // Bersihkan Input & Tutup Modal setelah operasi selesai
                   _titleController.clear();
                   _contentController.clear();
                   Navigator.of(context).pop();
                 }
               },
-              child: const Text("Simpan Catatan"),
+              child: Text(documentKey == null ? "Simpan Catatan Baru" : "Update Catatan"),
             )
           ],
         ),
       ),
     );
   }
+  
+  // --- WIDGET BUILD (READ & DELETE) ---
 
-  // 3. Widget build (untuk Menampilkan Data - READ with StreamBuilder)
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Live Notes Fire")),
 
-      // STREAMBUILDER: Bagian terpenting untuk Real-time
+      // STREAMBUILDER: Membaca data secara Real-time
       body: StreamBuilder<QuerySnapshot>(
-        // Mendengarkan perubahan pada koleksi 'notes', diurutkan berdasarkan waktu terbaru
+        // Query: Ambil koleksi 'notes', diurutkan berdasarkan waktu terbaru
         stream: _notes.orderBy('timestamp', descending: true).snapshots(),
         builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          // Kondisi 1: Masih Loading (Koneksi aktif, tapi data belum diterima)
+          // Kondisi 1: Masih Loading
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           
-          // Kondisi 2: Data Kosong (Query selesai, tapi tidak ada dokumen)
+          // Kondisi 2: Data Kosong
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("Belum ada catatan."));
           }
@@ -149,14 +165,15 @@ class _HomePageState extends State<HomePage> {
               return Card(
                 margin: const EdgeInsets.all(8),
                 child: ListTile(
+                  // 💡 Panggil _showForm untuk mode EDIT saat ListTile ditekan
+                  onTap: () => _showForm(context, document), 
                   title: Text(document['title'],
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(document['content']),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () {
-                      // Fungsi Hapus (DELETE)
-                      // Menghapus dokumen berdasarkan ID uniknya
+                      // Perintah DELETE
                       _notes.doc(document.id).delete(); 
                     },
                   ),
@@ -167,7 +184,8 @@ class _HomePageState extends State<HomePage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showForm(context), // Panggil fungsi CREATE
+        // Panggil _showForm tanpa parameter untuk mode CREATE
+        onPressed: () => _showForm(context), 
         child: const Icon(Icons.add),
       ),
     );
