@@ -1,9 +1,7 @@
 # Laporan LiveNotes - Flutter My Firebase App
 
  NAMA : Ahmad Bachtiar Raflyansyah
- 
  NIM  : 362458302141
- 
  Kelas: 弐
 
 ### Deskripsi Proyek
