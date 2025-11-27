@@ -1,8 +1,8 @@
 # Laporan LiveNotes - Flutter My Firebase App
 
-NAMA : Ahmad Bachtiar Raflyansyah
-NIM  : 362458302141
-Kelas: 弐
+ NAMA : Ahmad Bachtiar Raflyansyah
+ NIM  : 362458302141
+ Kelas: 弐
 
 ### Deskripsi Proyek
 LiveNotes adalah aplikasi Flutter yang mengintegrasikan Firebase Firestore untuk membuat catatan real-time. Aplikasi ini mendukung operasi CRUD (Create, Read, Update, Delete) dengan sinkronisasi otomatis antar perangkat.
